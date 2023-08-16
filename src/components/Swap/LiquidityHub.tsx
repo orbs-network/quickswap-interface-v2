@@ -23,6 +23,7 @@ import {
   useLiquidityHubState,
 } from 'state/swap/liquidity-hub/hooks';
 import { useTokenContract } from 'hooks/useContract';
+import { swap } from './liquidity-hub-npm';
 const API_ENDPOINT = 'https://hub.orbs.network';
 const WEBSITE = 'https://www.orbs.com';
 
@@ -41,7 +42,6 @@ export const useLiquidityHubCallback = (
   const location = useLocation();
   const queryParam = useQueryParam();
   const approve = useApprove(srcToken);
-  const swap = useSwap();
   const sign = useSign();
   return async (srcAmount?: string, minDestAmount?: string) => {
     if (liquidityHubDisabled) {
@@ -99,7 +99,7 @@ export const useLiquidityHubCallback = (
       });
       const signature = await sign(quoteResult.permitData);
 
-      const txResponse = await swap({
+      const txHash = await swap({
         account,
         srcToken,
         destToken,
@@ -107,8 +107,10 @@ export const useLiquidityHubCallback = (
         minDestAmount,
         signature,
         quoteResult,
+        chainId: 137,
       });
 
+      const txResponse = await waitForTx(txHash, library);
       return txResponse;
     } catch (error) {
       onResetLiquidityHubState();
@@ -421,239 +423,6 @@ const StyledLiquidityHubTxSettings = styled(Box)({
     },
   },
 });
-
-interface State {
-  state: string;
-  time: number;
-}
-interface LiquidityHubAnalyticsData {
-  _id: string;
-  state: State;
-  walletAddress?: string;
-  srcTokenAddress: string;
-  srcTokenSymbol: string;
-  dstTokenAddress: string;
-  dstTokenSymbol: string;
-  srcAmount: string;
-  dstAmountOut: string;
-  clobOutAmount: string;
-  approvalAmount: string;
-  approvalSpender: string;
-  approveFailedError: string;
-  clobAmountOut: string;
-  dexAmountOut: string;
-  isClobTrade: boolean;
-  quoteFailedError: string;
-  quoteRequestDurationMillis: number;
-  swapTxHash: string;
-  swapFailedError: string;
-  signature: string;
-  serializedOrder: string;
-  callData: string;
-  permitData: string;
-  signatureFailedError: string;
-  swapRequestDurationMillis: number;
-}
-
-const counter = () => {
-  const now = Date.now();
-
-  return () => {
-    return Date.now() - now;
-  };
-};
-
-class LiquidityHubAnalytics {
-  history: State[] = [];
-  initialTimestamp = Date.now();
-  data = { _id: crypto.randomUUID() } as LiquidityHubAnalyticsData;
-
-  private update({
-    newState,
-    values = {},
-  }: {
-    newState: string;
-    values?: Partial<LiquidityHubAnalyticsData>;
-  }) {
-    if (this.data.state) {
-      this.history.push(this.data.state);
-    }
-
-    this.data.state = {
-      state: newState,
-      time: Date.now() - this.initialTimestamp,
-    };
-    this.data = { ...this.data, ...values };
-
-    fetch('https://bi.orbs.network/putes/clob-ui', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ...this.data, history: this.history }),
-    }).catch();
-  }
-
-  onWalletConnected(walletAddress?: string) {
-    this.update({
-      newState: 'walletConnected',
-      values: { walletAddress },
-    });
-  }
-
-  onSrcToken(srcTokenAddress: string, srcTokenSymbol: string) {
-    this.update({
-      newState: 'srcToken',
-      values: { srcTokenAddress, srcTokenSymbol },
-    });
-  }
-
-  onDstToken(dstTokenAddress: string, dstTokenSymbol: string) {
-    this.update({
-      newState: 'dstToken',
-      values: { dstTokenAddress, dstTokenSymbol },
-    });
-  }
-
-  onDisabled() {
-    this.update({
-      newState: 'clobDisabled',
-    });
-  }
-
-  onSrcAmount(srcAmount: string) {
-    this.update({
-      newState: 'srcAmount',
-      values: { srcAmount },
-    });
-  }
-
-  onPageLoaded() {
-    this.update({
-      newState: 'swapPageLoaded',
-    });
-  }
-
-  onApproveRequest() {
-    this.update({
-      newState: 'approveRequest',
-      values: {
-        approveFailedError: '',
-      },
-    });
-  }
-
-  onTokenApproved() {
-    this.update({
-      newState: 'approved',
-    });
-  }
-
-  onApproveFailed(approveFailedError: string) {
-    this.update({
-      newState: 'approveFailed',
-      values: { approveFailedError },
-    });
-  }
-
-  onSwapClick() {
-    this.update({
-      newState: 'swapClick',
-    });
-  }
-
-  onConfirmSwapClick() {
-    this.update({
-      newState: 'swapConfirmClick',
-    });
-  }
-
-  onQuoteRequest(dexAmountOut: string) {
-    this.update({
-      newState: 'quoteRequest',
-      values: {
-        dexAmountOut,
-        quoteFailedError: '',
-      },
-    });
-  }
-
-  onQuoteSuccess(
-    clobAmountOut: string,
-    serializedOrder: string,
-    callData: string,
-    permitData: any,
-    quoteRequestDurationMillis: number,
-  ) {
-    this.update({
-      newState: 'quoteSuccess',
-      values: {
-        clobAmountOut,
-        quoteRequestDurationMillis,
-        isClobTrade: BN(this.data.dexAmountOut).isLessThan(BN(clobAmountOut)),
-        serializedOrder,
-        callData,
-        permitData,
-      },
-    });
-  }
-  onQuoteFailed(quoteFailedError: string) {
-    this.update({
-      newState: 'quoteFailed',
-      values: {
-        quoteFailedError,
-      },
-    });
-  }
-
-  onClobLowAmountOut() {
-    this.update({
-      newState: 'clobLowAmountOut',
-    });
-  }
-
-  onSignatureRequest() {
-    this.update({
-      newState: 'signatureRequest',
-    });
-  }
-  onSignatureSuccess(signature: string) {
-    this.update({
-      newState: 'signatureSuccess',
-      values: { signature },
-    });
-  }
-
-  onSignatureFailed(signatureFailedError: string) {
-    this.update({
-      newState: 'signatureFailed',
-      values: { signatureFailedError },
-    });
-  }
-
-  onSwapRequest() {
-    this.update({
-      newState: 'swapRequest',
-      values: { swapFailedError: '' },
-    });
-  }
-
-  onSwapSuccess(swapTxHash: string, swapRequestDurationMillis: number) {
-    this.update({
-      newState: 'swapSuccess',
-      values: { swapTxHash, swapRequestDurationMillis },
-    });
-  }
-
-  onSwapFailed(swapFailedError: string) {
-    this.update({
-      newState: 'swapFailed',
-      values: { swapFailedError },
-    });
-  }
-}
-export const liquidityHubAnalytics = new LiquidityHubAnalytics();
 
 export const useLiquidityHubAnalyticsListeners = (
   showConfirm: boolean,
