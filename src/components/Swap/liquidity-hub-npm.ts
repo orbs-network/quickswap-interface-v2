@@ -14,6 +14,8 @@ export const ORBS_WEBSITE = 'https://www.orbs.com';
 
 import Web3 from 'web3';
 import { ERC20_ABI } from 'constants/abis/erc20';
+import { useEffect } from 'react';
+import { useActiveWeb3React } from 'hooks';
 export interface QuoteArgs {
   inToken: string;
   outToken: string;
@@ -40,8 +42,15 @@ interface ApproveArgs {
   provider: any;
 }
 
-interface SubmitLiquidityTradeArgs extends SwapArgs, QuoteArgs, ApproveArgs {
+interface SubmitLiquidityTradeArgs {
   provider: any;
+  user: string;
+  inToken: string;
+  outToken: string;
+  inAmount: string;
+  outAmount: string;
+  chainId: number;
+  slippage: number;
 }
 
 interface QuoteResponse {
@@ -199,7 +208,7 @@ const approve = async (args: ApproveArgs) => {
     const tx = contract.methods
       .approve(permit2Address, maxUint256)
       .send({ from: args.user });
-    await sendAndWaitForConfirmations(tx, {});
+    // await sendAndWaitForConfirmations(tx, {});
     liquidityHubAnalytics.onTokenApproved();
   } catch (error) {
     liquidityHubAnalytics.onApproveFailed(error.message);
@@ -208,7 +217,9 @@ const approve = async (args: ApproveArgs) => {
   }
 };
 
-export const submitLiquidityHubTrade = async (args: SubmitLiquidityTradeArgs) => {
+export const submitLiquidityHubTrade = async (
+  args: SubmitLiquidityTradeArgs,
+) => {
   try {
     const quoteArgs = {
       inToken: args.inToken,
@@ -480,3 +491,33 @@ class LiquidityHubAnalytics {
 }
 
 export const liquidityHubAnalytics = new LiquidityHubAnalytics();
+
+export const useLiquidityHubAnalyticsListeners = (
+  srcToken?: any,
+  dstToken?: any,
+  srcAmount?: string,
+) => {
+  const { account } = useActiveWeb3React();
+
+  useEffect(() => {
+    if (srcAmount) {
+      liquidityHubAnalytics.onSrcAmount(srcAmount);
+    }
+  }, [srcAmount]);
+
+  useEffect(() => {
+    liquidityHubAnalytics.onWalletConnected(account);
+  }, [account]);
+
+  useEffect(() => {
+    liquidityHubAnalytics.onPageLoaded();
+  }, []);
+
+  useEffect(() => {
+    liquidityHubAnalytics.onSrcToken(srcToken?.address, srcToken?.symbol);
+  }, [srcToken?.address, srcToken?.symbol]);
+
+  useEffect(() => {
+    liquidityHubAnalytics.onDstToken(dstToken?.address, dstToken?.symbol);
+  }, [dstToken?.address, dstToken?.symbol]);
+};
