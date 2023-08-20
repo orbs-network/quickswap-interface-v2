@@ -67,7 +67,7 @@ import callWallchainAPI from 'utils/wallchainService';
 import ParaswapABI from 'constants/abis/ParaSwap_ABI.json';
 import { ONE } from 'v3lib/utils';
 import { SWAP_ROUTER_ADDRESS } from 'constants/v3/addresses';
-import { useLiquidityHubAnalyticsListeners } from './LiquidityHub';
+import LiquidityHub from '@orbs-network/liquidity-hub';
 
 const SwapBestTrade: React.FC<{
   currencyBgClass?: string;
@@ -652,9 +652,8 @@ const SwapBestTrade: React.FC<{
     txHash: undefined,
   });
 
-  useLiquidityHubAnalyticsListeners(
-    showConfirm,
-    attemptingTxn,
+  LiquidityHub.useAnalyticsListeners(
+    account,
     currencies[Field.INPUT],
     currencies[Field.OUTPUT],
     formattedAmounts[Field.INPUT],

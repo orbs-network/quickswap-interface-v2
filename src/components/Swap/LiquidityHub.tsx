@@ -12,6 +12,7 @@ import OrbsLogo from 'assets/images/orbs-logo.svg';
 import { useTranslation } from 'react-i18next';
 import { useLiquidityHubState } from 'state/swap/liquidity-hub/hooks';
 import { submitLiquidityHubTrade, swap } from './liquidity-hub-npm';
+import LiquidityHub from '@orbs-network/liquidity-hub';
 const API_ENDPOINT = 'https://hub.orbs.network';
 const WEBSITE = 'https://www.orbs.com';
 
@@ -23,24 +24,23 @@ export const useLiquidityHubCallback = (
   const { account, library } = useActiveWeb3React();
   const liquidityHubState = useLiquidityHubState();
   const [userSlippageTolerance] = useUserSlippageTolerance();
-  const queryParam = useQueryParam();
+  const swapState = LiquidityHub.useSwapState();
 
   return async (srcAmount?: string, minDestAmount?: string) => {
     if (
-      !minDestAmount ||
+      liquidityHubDisabled ||
+      !srcToken ||
       !destToken ||
       !srcAmount ||
-      !srcToken ||
-      liquidityHubDisabled ||
-      !library ||
+      !minDestAmount ||
       !account ||
-      queryParam === LiquidityHubControl.SKIP ||
-      (liquidityHubState.isFailed && queryParam !== LiquidityHubControl.FORCE)
+      !library
     ) {
       return undefined;
     }
+
     try {
-      const txHash = await submitLiquidityHubTrade({
+      const txHash = await LiquidityHub.submitTrade({
         slippage: userSlippageTolerance / 100,
         inAmount: srcAmount,
         outAmount: minDestAmount,
@@ -62,7 +62,7 @@ async function waitForTx(txHash: string, library: any) {
   for (let i = 0; i < 30; ++i) {
     // due to swap being fetch and not web3
 
-    await delay(3_000); // to avoid potential rate limiting from public rpc
+    await new Promise((resolve) => setTimeout(resolve, 3_000)); // to avoid potential rate limiting from public rpc
     try {
       const tx = await library.getTransaction(txHash);
       if (tx && tx instanceof Object && tx.blockNumber) {
@@ -71,26 +71,6 @@ async function waitForTx(txHash: string, library: any) {
     } catch (error) {}
   }
 }
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-enum LiquidityHubControl {
-  FORCE = '1',
-  SKIP = '2',
-}
-
-export const useQueryParam = () => {
-  const location = useLocation();
-
-  const query = useMemo(() => new URLSearchParams(location.search), [
-    location.search,
-  ]);
-
-  return query.get('liquidity-hub')?.toLowerCase();
-};
-
 export const LiquidityHubTxSettings = () => {
   const { t } = useTranslation();
   return (
@@ -197,7 +177,6 @@ const StyledLiquidityHubTxSettings = styled(Box)({
     },
   },
 });
-
 
 export const useConfirmationPendingContent = (pendingText?: string) => {
   const { t } = useTranslation();
