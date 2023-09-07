@@ -44,6 +44,7 @@ export const useLiquidityHubCallback = (
   const approve = useApprove(srcToken);
   const swap = useSwap();
   const sign = useSign();
+  const haveApprovalCallback = useHaveApproval(srcToken);
   const isSupported = useIsLiquidityHubSupported();
   return async (srcAmount?: string, minDestAmount?: string) => {
     if (!isSupported) {
@@ -81,25 +82,31 @@ export const useLiquidityHubCallback = (
       force: queryParam === LiquidityHubControl.FORCE,
       slippage: userSlippageTolerance / 100,
     };
+    const haveApproval = await haveApprovalCallback(srcAmount);
 
-    try {
-      const res = await quote(quoteArgs);
-      onSetLiquidityHubState({
-        isWon: true,
-        isLoading: false,
-        outAmount: res.outAmount,
-      });
-    } catch (error) {
-      onResetLiquidityHubState();
-      return undefined;
+    // if user have approval, skip quote
+    if (!haveApproval) {
+      try {
+        const res = await quote(quoteArgs);
+        onSetLiquidityHubState({
+          isWon: true,
+          isLoading: false,
+          outAmount: res.outAmount,
+        });
+      } catch (error) {
+        onResetLiquidityHubState();
+        return undefined;
+      }
     }
 
     try {
-      await approve(srcAmount);
+      if (!haveApproval) await approve();
       const quoteResult = await quote(quoteArgs);
 
       onSetLiquidityHubState({
         outAmount: quoteResult.outAmount,
+        isWon: true,
+        isLoading: false,
       });
       const signature = await sign(quoteResult.permitData);
 
@@ -128,17 +135,21 @@ export const useLiquidityHubCallback = (
   };
 };
 
-const useApprove = (srcToken?: string) => {
+const useHaveApproval = (srcToken?: string) => {
   const tokenContract = useTokenContract(srcToken);
   const { account } = useActiveWeb3React();
-  const { onSetLiquidityHubState } = useLiquidityHubActionHandlers();
+
   return async (srcAmount: string) => {
+    const allowance = await tokenContract?.allowance(account, permit2Address);
+    return BN(allowance.toString()).gte(BN(srcAmount));
+  };
+};
+
+const useApprove = (srcToken?: string) => {
+  const tokenContract = useTokenContract(srcToken);
+  const { onSetLiquidityHubState } = useLiquidityHubActionHandlers();
+  return async () => {
     try {
-      const allowance = await tokenContract?.allowance(account, permit2Address);
-      if (BN(allowance.toString()).gte(BN(srcAmount))) {
-        liquidityHubAnalytics.onTokenApproved();
-        return;
-      }
       onSetLiquidityHubState({ waitingForApproval: true });
       liquidityHubAnalytics.onApproveRequest();
       const response = await tokenContract?.approve(
