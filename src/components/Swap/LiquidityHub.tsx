@@ -97,6 +97,7 @@ export const useLiquidityHubCallback = (
       srcAmount,
       slippage: userSlippageTolerance / 100,
       walletAddress: account,
+      chainId: chainIdToUse,
     });
 
     if (isProMode) {
@@ -325,7 +326,7 @@ const useSign = () => {
 };
 
 const useSwap = () => {
-  const { library, account } = useActiveWeb3React();
+  const { library, account, chainId } = useActiveWeb3React();
   return async (args: {
     srcToken: string;
     destToken: string;
@@ -337,17 +338,20 @@ const useSwap = () => {
     const count = counter();
     try {
       liquidityHubAnalytics.onSwapRequest();
-      const txHashResponse = await fetch(`${API_ENDPOINT}/swapx?chainId=137`, {
-        method: 'POST',
-        body: JSON.stringify({
-          inToken: args.srcToken,
-          outToken: args.destToken,
-          inAmount: args.srcAmount,
-          user: account,
-          signature: args.signature,
-          ...args.quoteResult,
-        }),
-      });
+      const txHashResponse = await fetch(
+        `${API_ENDPOINT}/swapx?chainId=${chainId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            inToken: args.srcToken,
+            outToken: args.destToken,
+            inAmount: args.srcAmount,
+            user: account,
+            signature: args.signature,
+            ...args.quoteResult,
+          }),
+        },
+      );
       const swap = await txHashResponse.json();
       if (!swap) {
         throw new Error('Missing swap response');
@@ -372,7 +376,7 @@ const useSwap = () => {
 };
 
 const useQuote = () => {
-  const { account } = useActiveWeb3React();
+  const { account, chainId } = useActiveWeb3React();
   const [userSlippageTolerance] = useUserSlippageTolerance();
   const { lhControl } = useQueryParam();
 
@@ -382,7 +386,7 @@ const useQuote = () => {
     liquidityHubAnalytics.incrementQuoteIndex();
     liquidityHubAnalytics.onQuoteRequest();
     try {
-      const response = await fetch(`${API_ENDPOINT}/quote?chainId=137`, {
+      const response = await fetch(`${API_ENDPOINT}/quote?chainId=${chainId}`, {
         method: 'POST',
         body: JSON.stringify({
           inToken: args.inToken,
@@ -494,12 +498,12 @@ type InitTradeArgs = {
   srcAmount?: string;
   dexAmountOut?: string;
   dstTokenUsdValue?: number;
+  chainId: number;
 };
 
 const initialData: Partial<LiquidityHubAnalyticsData> = {
   _id: crypto.randomUUID(),
   partner: PARTNER,
-  chainId: 137,
   isClobTrade: false,
   isNotClobTradeReason: 'null',
   firstFailureSessionId: 'null',
@@ -535,6 +539,10 @@ class LiquidityHubAnalytics {
   data = initialData;
   firstFailureSessionId = '';
   abortController = new AbortController();
+
+  updateChainId(chainId: number) {
+    this.data.chainId = chainId;
+  }
 
   private updateAndSend(values = {} as Partial<LiquidityHubAnalyticsData>) {
     try {
@@ -1091,7 +1099,7 @@ export const useV3TradeTypeAnalyticsCallback = (
   },
   allowedSlippage: Percent,
 ) => {
-  const { account } = useActiveWeb3React();
+  const { account, chainId } = useActiveWeb3React();
   const outTokenUSD = useUSDCPriceFromAddress(
     currencies[Field.OUTPUT]?.wrapped.address || '',
   ).price;
@@ -1122,10 +1130,18 @@ export const useV3TradeTypeAnalyticsCallback = (
             outTokenUSD * Number(formattedAmounts[Field.OUTPUT]),
           walletAddress: account || '',
           slippage: Number(allowedSlippage.toFixed()),
+          chainId,
         });
       } catch (error) {}
     },
-    [srcTokenCurrency, dstTokenCurrency, outTokenUSD, account, allowedSlippage],
+    [
+      srcTokenCurrency,
+      dstTokenCurrency,
+      outTokenUSD,
+      account,
+      allowedSlippage,
+      chainId,
+    ],
   );
 };
 
@@ -1157,9 +1173,10 @@ export const useV2TradeTypeAnalyticsCallback = (
           dstTokenUsdValue: outTokenUSD * Number(trade?.outputAmount.toExact()),
           walletAddress: account || '',
           slippage: allowedSlippage / 100,
+          chainId,
         });
       } catch (error) {}
     },
-    [account, inToken, outToken, outTokenUSD, allowedSlippage],
+    [account, inToken, outToken, outTokenUSD, allowedSlippage, chainId],
   );
 };
