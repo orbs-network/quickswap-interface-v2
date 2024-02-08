@@ -12,11 +12,6 @@ import SpinnerImage from '../../assets/images/spinner.svg';
 import 'components/styles/TransactionConfirmationModal.scss';
 import { useTranslation } from 'react-i18next';
 import { CheckCircleOutline } from '@material-ui/icons';
-import {
-  LiquidityHubConfirmationModalContent,
-  useConfirmationPendingContent,
-} from 'components/Swap/LiquidityHub';
-import { useLiquidityHubState } from 'state/swap/liquidity-hub/hooks';
 
 interface ConfirmationPendingContentProps {
   onDismiss: () => void;
@@ -27,7 +22,7 @@ export const ConfirmationPendingContent: React.FC<ConfirmationPendingContentProp
   onDismiss,
   pendingText,
 }) => {
-  const confirmationPendingContent = useConfirmationPendingContent(pendingText);
+  const { t } = useTranslation();
 
   return (
     <Box padding={4} overflow='hidden'>
@@ -38,11 +33,9 @@ export const ConfirmationPendingContent: React.FC<ConfirmationPendingContentProp
         <Box my={4} className='flex justify-center spinner'>
           <img src={SpinnerImage} alt='Spinner' />
         </Box>
-        <h5>{confirmationPendingContent.title}</h5>
-        {confirmationPendingContent.pending && (
-          <p>{confirmationPendingContent.pending}</p>
-        )}
-        <p>{confirmationPendingContent.confirm || ''}</p>
+        <h5>{t('waitingConfirm')}</h5>
+        {pendingText && <p>{pendingText}</p>}
+        <p>{t('confirmTxinWallet')}</p>
       </Box>
     </Box>
   );
@@ -77,7 +70,6 @@ export const TransactionSubmittedContent: React.FC<TransactionSubmittedContentPr
         <p>
           {!txPending && <CheckCircleOutline />}
           {modalContent}
-          <LiquidityHubConfirmationModalContent txPending={txPending} />
         </p>
       </Box>
       <Box className='flex justify-between' mt={2}>

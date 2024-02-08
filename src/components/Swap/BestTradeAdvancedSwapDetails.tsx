@@ -20,6 +20,7 @@ interface TradeSummaryProps {
   allowedSlippage: Percent;
   inputCurrency: Currency;
   outputCurrency: Currency;
+  lhAmountOut?: string;
 }
 
 export const BestTradeSummary: React.FC<TradeSummaryProps> = ({
@@ -27,6 +28,7 @@ export const BestTradeSummary: React.FC<TradeSummaryProps> = ({
   allowedSlippage,
   inputCurrency,
   outputCurrency,
+  lhAmountOut,
 }) => {
   const [openSettingsModal, setOpenSettingsModal] = useState(false);
   const { t } = useTranslation();
@@ -70,10 +72,16 @@ export const BestTradeSummary: React.FC<TradeSummaryProps> = ({
         </Box>
         <Box>
           <small>
-            {(
-              Number(tradeAmount.toString()) /
-              10 ** currency.decimals
-            ).toLocaleString('us')}{' '}
+            {isExactIn && lhAmountOut ? (
+              lhAmountOut
+            ) : (
+              <>
+                {(
+                  Number(tradeAmount.toString()) /
+                  10 ** currency.decimals
+                ).toLocaleString('us')}{' '}
+              </>
+            )}
             {currency.symbol}
           </small>
           <CurrencyLogo currency={currency} size='16px' />
@@ -94,12 +102,14 @@ export interface BestTradeAdvancedSwapDetailsProps {
   optimalRate?: OptimalRate | null;
   inputCurrency?: Currency;
   outputCurrency?: Currency;
+  lhAmountOut?: string;
 }
 
 export const BestTradeAdvancedSwapDetails: React.FC<BestTradeAdvancedSwapDetailsProps> = ({
   optimalRate,
   inputCurrency,
   outputCurrency,
+  lhAmountOut,
 }) => {
   const [allowedSlippage] = useUserSlippageTolerance();
   const pct = basisPointsToPercent(allowedSlippage);
@@ -112,6 +122,7 @@ export const BestTradeAdvancedSwapDetails: React.FC<BestTradeAdvancedSwapDetails
           inputCurrency={inputCurrency}
           outputCurrency={outputCurrency}
           allowedSlippage={pct}
+          lhAmountOut={lhAmountOut}
         />
       )}
     </>

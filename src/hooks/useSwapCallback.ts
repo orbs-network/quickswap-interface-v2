@@ -24,7 +24,7 @@ import { useRouterContract } from './useContract';
 import useTransactionDeadline from './useTransactionDeadline';
 import useENS from './useENS';
 import { Version } from './useToggledVersion';
-import { liquidityHubAnalytics } from 'components/Swap/LiquidityHub';
+import { lhAnalytics } from 'components/Swap/LiquidityHub';
 
 export enum SwapCallbackState {
   INVALID,
@@ -184,14 +184,13 @@ export function useSwapCallback(
     }
 
     const tradeVersion = Version.v2;
-
     return {
       state: SwapCallbackState.VALID,
       callback: async function onSwap(): Promise<{
         response: TransactionResponse;
         summary: string;
       }> {
-        liquidityHubAnalytics.onDexSwapRequest();
+        lhAnalytics?.onSwapRequest();
         const estimatedCalls: EstimatedSwapCall[] = await Promise.all(
           swapCalls.map((call) => {
             const {
@@ -277,7 +276,7 @@ export function useSwapCallback(
             : { from: account }),
         })
           .then((response: TransactionResponse) => {
-            liquidityHubAnalytics.onDexSwapSuccess(response.hash);
+            lhAnalytics?.onSwapSuccess(response.hash);
             const inputSymbol = trade.inputAmount.currency.symbol;
             const outputSymbol = trade.outputAmount.currency.symbol;
             const inputAmount = formatTokenAmount(trade.inputAmount);
@@ -305,7 +304,7 @@ export function useSwapCallback(
             return { response, summary: withVersion };
           })
           .catch((error: any) => {
-            liquidityHubAnalytics.onDexSwapFailed(error.message);
+            lhAnalytics?.onSwapFailed(error.message);
             // if the user rejected the tx, pass this along
             if (error?.code === 'ACTION_REJECTED') {
               throw new Error('Transaction rejected.');

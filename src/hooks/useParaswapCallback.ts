@@ -24,10 +24,7 @@ import { useContract } from './useContract';
 import callWallchainAPI from 'utils/wallchainService';
 import { useSwapActionHandlers } from 'state/swap/hooks';
 import { BigNumber } from 'ethers';
-import {
-  liquidityHubAnalytics,
-  useLiquidityHubCallback,
-} from 'components/Swap/LiquidityHub';
+import { lhAnalytics } from 'components/Swap/LiquidityHub';
 
 export enum SwapCallbackState {
   INVALID,
@@ -72,12 +69,6 @@ export function useParaswapCallback(
   const { onBestRoute, onSetSwapDelay } = useSwapActionHandlers();
 
   const addTransaction = useTransactionAdder();
-  const liquidutyHubCallback = useLiquidityHubCallback(
-    priceRoute?.srcToken,
-    priceRoute?.destToken,
-    inputCurrency,
-    outputCurrency,
-  );
   const { address: recipientAddress } = useENS(recipientAddressOrName);
   const recipient =
     recipientAddressOrName === null ? account : recipientAddress;
@@ -86,7 +77,6 @@ export function useParaswapCallback(
     priceRoute?.contractAddress,
     ParaswapABI,
   );
-
   return useMemo(() => {
     if (!priceRoute || !library || !account || !chainId) {
       return {
@@ -146,22 +136,6 @@ export function useParaswapCallback(
           recipientAddressOrName,
         });
 
-        const liquidityHubResult = await liquidutyHubCallback(
-          maxSrcAmount,
-          minDestAmount,
-        );
-
-        if (liquidityHubResult) {
-          addTransaction(liquidityHubResult, {
-            summary,
-          });
-
-          return {
-            response: liquidityHubResult,
-            summary,
-          };
-        }
-
         let txParams;
 
         try {
@@ -220,16 +194,16 @@ export function useParaswapCallback(
         );
 
         try {
-          liquidityHubAnalytics.onDexSwapRequest();
+          lhAnalytics?.onSwapRequest();
           const response = await signer.sendTransaction(ethersTxParams);
-          liquidityHubAnalytics.onDexSwapSuccess(response);
+          lhAnalytics?.onSwapSuccess(response.hash);
           addTransaction(response, {
             summary,
           });
 
           return { response, summary };
         } catch (error) {
-          liquidityHubAnalytics.onDexSwapFailed(error.message);
+          lhAnalytics?.onSwapFailed(error.message);
           if (error?.code === 'ACTION_REJECTED') {
             throw new Error('Transaction rejected.');
           } else {
@@ -254,7 +228,6 @@ export function useParaswapCallback(
     inputCurrency,
     outputCurrency,
     allowedSlippage,
-    liquidutyHubCallback,
   ]);
 }
 

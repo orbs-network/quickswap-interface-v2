@@ -383,26 +383,6 @@ export function useSelectedWallet(): {
   return { selectedWallet, updateSelectedWallet: _updateSelectedWallet };
 }
 
-export function useLiquidityHubManager(): [boolean, () => void] {
-  const dispatch = useDispatch<AppDispatch>();
-  const userLiquidityHubDisabled = useSelector<
-    AppState,
-    AppState['user']['userLiquidityHubDisabled']
-  >((state) => {
-    return state.user.userLiquidityHubDisabled;
-  });
-
-  const toggleSetLiquidityHub = useCallback(() => {
-    dispatch(
-      updateUserLiquidityHub({
-        userLiquidityHubDisabled: !userLiquidityHubDisabled,
-      }),
-    );
-  }, [userLiquidityHubDisabled, dispatch]);
-
-  return [userLiquidityHubDisabled, toggleSetLiquidityHub];
-}
-
 export function useUserZapSlippageTolerance(): [
   Percent,
   (slippageTolerance: Percent) => void,

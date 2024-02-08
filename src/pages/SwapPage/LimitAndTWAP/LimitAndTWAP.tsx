@@ -4,7 +4,7 @@ import {
   Orders as QuickSwapOrders,
 } from '@orbs-network/twap-ui-quickswap';
 import { CurrencySearchModal } from 'components';
-import { liquidityHubAnalytics } from 'components/Swap/LiquidityHub';
+import { lhAnalytics } from 'components/Swap/LiquidityHub';
 import { useIsProMode, useActiveWeb3React } from 'hooks';
 import { useAllTokens, useCurrency } from 'hooks/Tokens';
 import useSwapRedirects from 'hooks/useSwapRedirect';
@@ -31,11 +31,12 @@ function TWAPBase({ limit }: { limit?: boolean }) {
   const outputCurrency = useCurrency(outputCurrencyId);
 
   const allTokens = useAllTokens();
+
   const toggleWalletModal = useWalletModalToggle();
   const onCurrencySelection = useSwapActionHandlers().onCurrencySelection;
   const { isProMode } = useIsProMode();
   const { redirectWithCurrency } = useSwapRedirects();
-
+  const onTwapTradeAnalytics = lhAnalytics.useTwapTrade();
   const onSrcSelect = useCallback(
     (token: any) => {
       onCurrencySelection(Field.INPUT, token);
@@ -56,20 +57,18 @@ function TWAPBase({ limit }: { limit?: boolean }) {
     (value: OnTxSubmitValues) => {
       const args = {
         srcAmount: value.srcAmount,
-        srcTokenAddress: value.srcToken.address,
-        srcTokenSymbol: value.srcToken.symbol,
+        srcToken: value.srcToken,
         dexAmountOut: value.dstAmount,
-        dstTokenAddress: value.dstToken.address,
-        dstTokenSymbol: value.dstToken.symbol,
         dstTokenUsdValue: Number(value.dstUSD),
+        dstToken: value.dstToken,
       };
       if (limit) {
-        liquidityHubAnalytics.onLimitTrade(args);
+        onTwapTradeAnalytics(args, true);
       } else {
-        liquidityHubAnalytics.onTwapTrade(args);
+        onTwapTradeAnalytics(args, false);
       }
     },
-    [limit],
+    [limit, onTwapTradeAnalytics],
   );
 
   return (

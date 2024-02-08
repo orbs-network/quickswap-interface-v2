@@ -70,7 +70,7 @@ import { getConfig } from 'config/index';
 import { wrappedCurrency } from 'utils/wrappedCurrency';
 import { useUSDCPriceFromAddress } from 'utils/useUSDCPrice';
 import { V2_ROUTER_ADDRESS } from 'constants/v3/addresses';
-import { useV2TradeTypeAnalyticsCallback } from './LiquidityHub';
+import { lhAnalytics } from './LiquidityHub';
 
 const Swap: React.FC<{
   currencyBgClass?: string;
@@ -515,10 +515,7 @@ const Swap: React.FC<{
     fromTokenWrapped?.address ?? '',
   );
 
-  const onV2TradeAnalytics = useV2TradeTypeAnalyticsCallback(
-    currencies,
-    allowedSlippage,
-  );
+  const onV2TradeAnalytics = lhAnalytics.useV2Trade(currencies);
 
   const handleSwap = useCallback(() => {
     onV2TradeAnalytics(trade);

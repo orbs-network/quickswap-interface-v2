@@ -77,6 +77,11 @@ import { SWAP_ROUTER_ADDRESS } from 'constants/v3/addresses';
 import { getConfig } from 'config/index';
 import { useUSDCPriceFromAddress } from 'utils/useUSDCPrice';
 import { wrappedCurrency } from 'utils/wrappedCurrency';
+import { BigNumber } from 'ethers';
+import {
+  LiquidityHubProvider,
+  useLiquidityHub,
+} from '@orbs-network/liquidity-hub-lib';
 
 const SwapBestTrade: React.FC<{
   currencyBgClass?: string;
@@ -430,7 +435,6 @@ const SwapBestTrade: React.FC<{
         : parsedAmounts[dependentField]?.toExact() ?? '',
     };
   }, [independentField, typedValue, dependentField, showWrap, parsedAmounts]);
-
   const maxAmountInput =
     maxAmountInputV2 && inputCurrencyV3
       ? CurrencyAmount.fromRawAmount(inputCurrencyV3, maxAmountInputV2.raw)
@@ -499,7 +503,39 @@ const SwapBestTrade: React.FC<{
     outputCurrency,
   );
 
-  const noRoute = !optimalRate || optimalRate.bestRoute.length < 0;
+  const [slippage] = useUserSlippageTolerance();
+  const fromTokenWrapped = wrappedCurrency(currencies[Field.INPUT], chainId);
+  const toTokenWrapped = wrappedCurrency(currencies[Field.OUTPUT], chainId);
+
+  const { price: fromTokenUSDPrice } = useUSDCPriceFromAddress(
+    fromTokenWrapped?.address ?? '',
+  );
+
+  const { price: toTokenUSDPrice } = useUSDCPriceFromAddress(
+    toTokenWrapped?.address ?? '',
+  );
+  const {
+    quote: lhQuote,
+    confirmSwap: lhConfirmSwap,
+    tradeOwner,
+    analytics: lhAnalytics,
+    quoteLoading: lhQuoteLoading,
+    noQuoteAmountOut,
+  } = useLiquidityHub({
+    fromToken: currencies[Field.INPUT],
+    toToken: currencies[Field.OUTPUT],
+    fromAmountUI: formattedAmounts[Field.INPUT],
+    fromTokenUsd: fromTokenUSDPrice,
+    toTokenUsd: toTokenUSDPrice,
+    slippage: slippage / 100,
+    dexAmountOut: optimalRate?.destAmount,
+    swapTypeIsBuy: swapType === SwapSide.BUY,
+    deductSlippage: true,
+  });
+
+  const noRoute = !noQuoteAmountOut
+    ? false
+    : !optimalRate || optimalRate.bestRoute.length < 0;
   const swapInputAmountWithSlippage =
     optimalRate && inputCurrencyV3
       ? CurrencyAmount.fromRawAmount(
@@ -542,7 +578,7 @@ const SwapBestTrade: React.FC<{
           : wrapType === WrapType.UNWRAPPING
           ? t('unwrappingMATIC', { symbol: WETH[chainId].symbol })
           : '';
-      } else if (loadingOptimalRate) {
+      } else if (loadingOptimalRate && lhQuoteLoading) {
         return t('loading');
       } else if (
         optimalRateError === 'ESTIMATED_LOSS_GREATER_THAN_MAX_IMPACT'
@@ -580,6 +616,7 @@ const SwapBestTrade: React.FC<{
     formattedAmounts,
     showWrap,
     loadingOptimalRate,
+    lhQuoteLoading,
     optimalRateError,
     swapInputError,
     noRoute,
@@ -699,6 +736,9 @@ const SwapBestTrade: React.FC<{
   const onParaswap = () => {
     if (showWrap && onWrap) {
       onWrap();
+    } else if (tradeOwner === 'lh') {
+      lhAnalytics.initSwap();
+      lhConfirmSwap();
     } else if (isExpertMode) {
       handleParaswap();
     } else {
@@ -740,16 +780,27 @@ const SwapBestTrade: React.FC<{
   const config = getConfig(chainId);
   const { selectedWallet } = useSelectedWallet();
   const getConnection = useGetConnection();
-  const fromTokenWrapped = wrappedCurrency(currencies[Field.INPUT], chainId);
-  const { price: fromTokenUSDPrice } = useUSDCPriceFromAddress(
-    fromTokenWrapped?.address ?? '',
-  );
+
+  const outAmount = useMemo(() => {
+    if (tradeOwner === 'dex' || swapType === SwapSide.BUY) {
+      return formattedAmounts[Field.OUTPUT];
+    }
+    if (tradeOwner === 'lh') {
+      return lhQuote?.outAmountUIWithSlippage || '';
+    }
+    return '';
+  }, [
+    formattedAmounts,
+    swapType,
+    lhQuote?.outAmountUIWithSlippage,
+    tradeOwner,
+  ]);
 
   const handleParaswap = useCallback(() => {
     if (!paraswapCallback) {
       return;
     }
-
+    lhAnalytics.initSwap();
     setSwapState({
       attemptingTxn: true,
       tradeToConfirm,
@@ -834,6 +885,7 @@ const SwapBestTrade: React.FC<{
       });
   }, [
     paraswapCallback,
+    lhAnalytics,
     tradeToConfirm,
     showConfirm,
     finalizedTransaction,
@@ -1061,7 +1113,7 @@ const SwapBestTrade: React.FC<{
         showMaxButton={false}
         otherCurrency={currencies[Field.INPUT]}
         handleCurrencySelect={handleOtherCurrencySelect}
-        amount={formattedAmounts[Field.OUTPUT]}
+        amount={outAmount}
         setAmount={handleTypeOutput}
         color={isProMode ? 'white' : 'secondary'}
         bgClass={isProMode ? 'swap-bg-highlight' : currencyBgClass}
@@ -1118,6 +1170,7 @@ const SwapBestTrade: React.FC<{
         optimalRate={optimalRate}
         inputCurrency={inputCurrency}
         outputCurrency={outputCurrency}
+        lhAmountOut={tradeOwner === 'lh' ? lhQuote?.outAmountUI : undefined}
       />
       <Box className='swapButtonWrapper'>
         {showApproveFlow && (
@@ -1170,4 +1223,22 @@ const SwapBestTrade: React.FC<{
   );
 };
 
-export default SwapBestTrade;
+const Wrapped = ({ currencyBgClass }: { currencyBgClass?: string }) => {
+  const { account, library, chainId } = useActiveWeb3React();
+
+  return (
+    <LiquidityHubProvider
+      chainId={chainId}
+      account={account}
+      provider={library?.provider}
+      partner='quickswap'
+      uiSettings={{
+        buttonColor: 'linear-gradient(180deg,#448aff,#004ce6)',
+      }}
+    >
+      <SwapBestTrade currencyBgClass={currencyBgClass} />
+    </LiquidityHubProvider>
+  );
+};
+
+export default Wrapped;

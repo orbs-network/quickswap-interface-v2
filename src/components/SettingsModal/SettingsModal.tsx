@@ -16,7 +16,6 @@ import {
   useBonusRouterManager,
   useSlippageManuallySet,
   useUserSingleHopOnly,
-  useLiquidityHubManager,
 } from 'state/user/hooks';
 import { ReactComponent as CloseIcon } from 'assets/images/CloseIcon.svg';
 import 'components/styles/SettingsModal.scss';
@@ -57,10 +56,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const [deadlineInput, setDeadlineInput] = useState('');
   const [expertConfirm, setExpertConfirm] = useState(false);
   const [expertConfirmText, setExpertConfirmText] = useState('');
-  const [
-    liquidityHubDisabled,
-    toggleLiquidityHubDisabled,
-  ] = useLiquidityHubManager();
 
   const slippageInputIsValid =
     slippageInput === '' ||
